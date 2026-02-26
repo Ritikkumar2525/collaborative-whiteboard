@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import {ArrowLeft} from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 function Login() {
@@ -27,10 +28,9 @@ function Login() {
     e.preventDefault();
     try {
       const res = await axios.post(
-        "http://localhost:8000/api/auth/login",
-        form
-      );
-
+  "http://localhost:8000/api/auth/login",
+  form
+);
       const { accessToken } = res.data;
       login(accessToken);
       navigate("/dashboard");
@@ -39,190 +39,126 @@ function Login() {
     }
   };
 
-  /* 🔥 GOOGLE LOGIN REDIRECT */
   const handleGoogleLogin = () => {
     window.location.href =
       "http://localhost:8000/api/auth/google";
   };
 
   return (
-    <div style={styles.page}>
-      <div style={styles.brand} onClick={() => navigate("/")}>
-        CollabBoard
-      </div>
+    <div className="min-h-screen grid md:grid-cols-2 font-poppins">
 
-      <div style={styles.card}>
-        <h2 style={styles.heading}>Welcome Back</h2>
-        <p style={styles.subText}>
-          Login to continue to your workspace
-        </p>
-
-        <form onSubmit={handleLogin} style={styles.form}>
-          <input
-            type="email"
-            name="email"
-            placeholder="Email address"
-            onChange={handleChange}
-            required
-            style={styles.input}
-          />
-
-          <input
-            type="password"
-            name="password"
-            placeholder="Password"
-            onChange={handleChange}
-            required
-            style={styles.input}
-          />
-
-          <button type="submit" style={styles.button}>
-            Login
+      {/* LEFT SIDE */}
+      <div className="hidden md:flex bg-zinc-950 text-white p-16 flex-col justify-between">
+        <div className="flex items-center justify-start gap-4">
+          <button 
+            onClick={() => navigate("/")}
+            className="text-xs font-medium hover:text-zinc-300 transition"
+          >
+            <ArrowLeft size={16} />
           </button>
-        </form>
-
-        <div style={styles.divider}>
-          <span style={styles.line}></span>
-          <span style={styles.or}>OR</span>
-          <span style={styles.line}></span>
+          <h1 
+            onClick={() => navigate("/")}
+            className="text-2xl font-semibold cursor-pointer"
+          >
+            InteractX
+          </h1>
         </div>
 
-        {/* 🔥 GOOGLE BUTTON */}
-        <button
-          onClick={handleGoogleLogin}
-          style={styles.googleBtn}
-        >
-          <img
-            src="https://www.svgrepo.com/show/475656/google-color.svg"
-            alt="google"
-            style={{ width: "18px", marginRight: "10px" }}
-          />
-          Continue with Google
-        </button>
+        <div>
+          <h2 className="text-4xl font-semibold leading-tight">
+            Welcome back.
+            <br />
+            <span className="text-zinc-500">
+              Let’s get you inside.
+            </span>
+          </h2>
 
-        <p style={styles.signupText}>
-          Don’t have an account?{" "}
-          <span
-            style={styles.signupLink}
-            onClick={() => navigate("/register")}
+          <p className="mt-6 text-zinc-400 max-w-sm leading-relaxed">
+            Access your workspace, reconnect with your team,
+            and continue building without friction.
+          </p>
+        </div>
+
+        <div className="text-sm text-zinc-500">
+          © 2026 InteractX
+        </div>
+      </div>
+
+      {/* RIGHT SIDE */}
+      <div className="flex items-center justify-center bg-zinc-50 px-6 py-16">
+        <div className="w-full max-w-md bg-white border border-zinc-200 rounded-2xl p-10">
+
+          <h2 className="text-2xl font-semibold tracking-tight">
+            Sign in
+          </h2>
+
+          <p className="mt-2 text-sm text-zinc-500">
+            Enter your credentials to continue
+          </p>
+
+          <form onSubmit={handleLogin} className="mt-8 space-y-5">
+
+            <input
+              type="email"
+              name="email"
+              placeholder="Email address"
+              onChange={handleChange}
+              required
+              className="w-full px-4 py-3 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black"
+            />
+
+            <input
+              type="password"
+              name="password"
+              placeholder="Password"
+              onChange={handleChange}
+              required
+              className="w-full px-4 py-3 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black"
+            />
+
+            <button
+            onClick={handleLogin}
+              type="submit"
+              className="w-full py-3 bg-black text-white rounded-lg font-medium hover:bg-zinc-800 transition"
+            >
+              Login
+            </button>
+          </form>
+
+          {/* Divider */}
+          <div className="flex items-center gap-4 my-8">
+            <div className="flex-1 h-px bg-zinc-200" />
+            <span className="text-xs text-zinc-400">OR</span>
+            <div className="flex-1 h-px bg-zinc-200" />
+          </div>
+
+          {/* Google Button */}
+          <button
+            onClick={handleGoogleLogin}
+            className="w-full flex items-center justify-center gap-3 py-3 border border-zinc-300 rounded-lg text-sm font-medium hover:bg-zinc-100 transition"
           >
-            Create one
-          </span>
-        </p>
+            <img
+              src="https://www.svgrepo.com/show/475656/google-color.svg"
+              alt="google"
+              className="w-4"
+            />
+            Continue with Google
+          </button>
+
+          <p className="mt-8 text-sm text-center text-zinc-500">
+            Don’t have an account?{" "}
+            <span
+              onClick={() => navigate("/register")}
+              className="font-medium text-black cursor-pointer hover:underline"
+            >
+              Create one
+            </span>
+          </p>
+
+        </div>
       </div>
     </div>
   );
 }
-
-const styles = {
-  page: {
-    minHeight: "100vh",
-    background: "#f8f5f0",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
-    fontFamily: "Arial, sans-serif",
-    padding: "20px",
-  },
-
-  brand: {
-    position: "absolute",
-    top: "30px",
-    left: "50px",
-    fontSize: "22px",
-    fontWeight: "bold",
-    cursor: "pointer",
-    color: "#111827",
-  },
-
-  card: {
-    width: "380px",
-    background: "#ffffff",
-    padding: "40px",
-    borderRadius: "16px",
-    boxShadow: "0 10px 40px rgba(0,0,0,0.08)",
-  },
-
-  heading: {
-    fontSize: "24px",
-    marginBottom: "10px",
-    color: "#111827",
-  },
-
-  subText: {
-    fontSize: "14px",
-    color: "#6b7280",
-    marginBottom: "25px",
-  },
-
-  form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "15px",
-  },
-
-  input: {
-    padding: "12px",
-    borderRadius: "8px",
-    border: "1px solid #e5e7eb",
-    fontSize: "14px",
-  },
-
-  button: {
-    padding: "12px",
-    borderRadius: "8px",
-    border: "none",
-    background: "#111827",
-    color: "white",
-    fontWeight: "600",
-    cursor: "pointer",
-    marginTop: "10px",
-  },
-
-  divider: {
-    display: "flex",
-    alignItems: "center",
-    margin: "25px 0",
-    gap: "10px",
-  },
-
-  line: {
-    flex: 1,
-    height: "1px",
-    background: "#e5e7eb",
-  },
-
-  or: {
-    fontSize: "12px",
-    color: "#6b7280",
-  },
-
-  googleBtn: {
-    width: "100%",
-    padding: "12px",
-    borderRadius: "8px",
-    border: "1px solid #e5e7eb",
-    background: "white",
-    cursor: "pointer",
-    fontWeight: "500",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  signupText: {
-    marginTop: "20px",
-    textAlign: "center",
-    fontSize: "14px",
-    color: "#6b7280",
-  },
-
-  signupLink: {
-    color: "#111827",
-    fontWeight: "600",
-    cursor: "pointer",
-  },
-};
 
 export default Login;

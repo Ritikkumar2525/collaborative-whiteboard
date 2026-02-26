@@ -1,6 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 
 function Register() {
   const navigate = useNavigate();
@@ -27,142 +28,106 @@ function Register() {
   };
 
   return (
-    <div style={styles.page}>
-      {/* Brand */}
-      <div style={styles.brand} onClick={() => navigate("/")}>
-        CollabBoard
+    <div className="min-h-screen grid md:grid-cols-2 font-poppins">
+
+      {/* LEFT SIDE */}
+      <div className="hidden md:flex bg-zinc-950 text-white p-16 flex-col justify-between">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate("/")}
+            className="hover:text-zinc-300 transition"
+          >
+            <ArrowLeft size={18} />
+          </button>
+
+          <h1
+            onClick={() => navigate("/")}
+            className="text-2xl font-semibold cursor-pointer"
+          >
+            InteractX
+          </h1>
+        </div>
+
+        <div>
+          <h2 className="text-4xl font-semibold leading-tight">
+            Create your workspace.
+            <br />
+            <span className="text-zinc-500">
+              Start building today.
+            </span>
+          </h2>
+
+          <p className="mt-6 text-zinc-400 max-w-sm leading-relaxed">
+            Join thousands of teams who trust InteractX to simplify
+            collaboration and accelerate execution.
+          </p>
+        </div>
+
+        <div className="text-sm text-zinc-500">
+          © 2026 InteractX
+        </div>
       </div>
 
-      {/* Register Card */}
-      <div style={styles.card}>
-        <h2 style={styles.heading}>Create Account</h2>
-        <p style={styles.subText}>
-          Join CollabBoard and start collaborating
-        </p>
+      {/* RIGHT SIDE */}
+      <div className="flex items-center justify-center bg-zinc-50 px-6 py-16">
+        <div className="w-full max-w-md bg-white border border-zinc-200 rounded-2xl p-10">
 
-        <form onSubmit={handleRegister} style={styles.form}>
-          <input
-            type="text"
-            placeholder="Full Name"
-            onChange={(e) => setName(e.target.value)}
-            required
-            style={styles.input}
-          />
+          <h2 className="text-2xl font-semibold tracking-tight">
+            Create account
+          </h2>
 
-          <input
-            type="email"
-            placeholder="Email Address"
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            style={styles.input}
-          />
+          <p className="mt-2 text-sm text-zinc-500">
+            Enter your details to get started
+          </p>
 
-          <input
-            type="password"
-            placeholder="Password"
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            style={styles.input}
-          />
+          <form onSubmit={handleRegister} className="mt-8 space-y-5">
 
-          <button type="submit" style={styles.button}>
-            Register
-          </button>
-        </form>
+            <input
+              type="text"
+              placeholder="Full Name"
+              onChange={(e) => setName(e.target.value)}
+              required
+              className="w-full px-4 py-3 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black"
+            />
 
-        <p style={styles.loginText}>
-          Already have an account?{" "}
-          <span
-            style={styles.loginLink}
-            onClick={() => navigate("/login")}
-          >
-            Login
-          </span>
-        </p>
+            <input
+              type="email"
+              placeholder="Email Address"
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full px-4 py-3 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black"
+            />
+
+            <input
+              type="password"
+              placeholder="Password"
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full px-4 py-3 border border-zinc-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black"
+            />
+
+            <button
+              type="submit"
+              className="w-full py-3 bg-black text-white rounded-lg font-medium hover:bg-zinc-800 transition"
+            >
+              Register
+            </button>
+          </form>
+
+          <p className="mt-8 text-sm text-center text-zinc-500">
+            Already have an account?{" "}
+            <span
+              onClick={() => navigate("/login")}
+              className="font-medium text-black cursor-pointer hover:underline"
+            >
+              Sign in
+            </span>
+          </p>
+
+        </div>
       </div>
     </div>
   );
 }
-
-const styles = {
-  page: {
-    minHeight: "100vh",
-    background: "#f8f5f0", // creamy
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
-    fontFamily: "Arial, sans-serif",
-    padding: "20px",
-  },
-
-  brand: {
-    position: "absolute",
-    top: "30px",
-    left: "50px",
-    fontSize: "22px",
-    fontWeight: "bold",
-    cursor: "pointer",
-    color: "#111827",
-  },
-
-  card: {
-    width: "400px",
-    background: "#ffffff",
-    padding: "40px",
-    borderRadius: "16px",
-    boxShadow: "0 10px 40px rgba(0,0,0,0.08)",
-  },
-
-  heading: {
-    fontSize: "24px",
-    marginBottom: "10px",
-    color: "#111827",
-  },
-
-  subText: {
-    fontSize: "14px",
-    color: "#6b7280",
-    marginBottom: "25px",
-  },
-
-  form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "15px",
-  },
-
-  input: {
-    padding: "12px",
-    borderRadius: "8px",
-    border: "1px solid #e5e7eb",
-    fontSize: "14px",
-    outline: "none",
-  },
-
-  button: {
-    padding: "12px",
-    borderRadius: "8px",
-    border: "none",
-    background: "#111827",
-    color: "white",
-    fontWeight: "600",
-    cursor: "pointer",
-    marginTop: "10px",
-  },
-
-  loginText: {
-    marginTop: "20px",
-    textAlign: "center",
-    fontSize: "14px",
-    color: "#6b7280",
-  },
-
-  loginLink: {
-    color: "#111827",
-    fontWeight: "600",
-    cursor: "pointer",
-  },
-};
 
 export default Register;

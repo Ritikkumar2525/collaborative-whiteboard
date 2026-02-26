@@ -1,10 +1,9 @@
 import { useEffect, useState, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { socket } from "../hooks/useSocket";
 import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
 
-function Room() {
+export default function Room() {
   const { roomId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -12,7 +11,6 @@ function Room() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [typingUser, setTypingUser] = useState("");
-  const [activeMenuId, setActiveMenuId] = useState(null);
   const [color, setColor] = useState("#000000");
   const [brushSize, setBrushSize] = useState(2);
   const [file, setFile] = useState(null);
@@ -21,21 +19,23 @@ function Room() {
   const [redoStack, setRedoStack] = useState([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentObject, setCurrentObject] = useState(null);
-
+  
+  // New state for the on-canvas text input
+  const [textInput, setTextInput] = useState(null); 
 
   const canvasRef = useRef(null);
   const contextRef = useRef(null);
   const messagesEndRef = useRef(null);
   const typingTimeout = useRef(null);
   const lastPointRef = useRef(null);
-  const fileInputRef = useRef(null);
-
+  const startPosRef = useRef(null);
+  
   const scaleRef = useRef(1);
   const offsetRef = useRef({ x: 0, y: 0 });
   const isPanningRef = useRef(false);
 
-/* ================= PROTECT ROOM ================= */
-useEffect(() => {
+  /* ================= PROTECT ROOM ================= */
+  useEffect(() => {
     if (!user) {
       navigate("/login");
     }
@@ -52,13 +52,13 @@ useEffect(() => {
     socket.emit("join-chat-room", roomId);
 
     socket.on("load-whiteboard", (board) => {
-        setStrokes(board?.objects || []);
-      });
+      setStrokes(board?.objects || []);
+    });
 
     socket.on("draw", ({ object }) => {
-        setStrokes((prev) => [...prev, object]);
-        setRedoStack([]); // keep this
-      });
+      setStrokes((prev) => [...prev, object]);
+      setRedoStack([]); 
+    });
 
     socket.on("receive-message", (msg) => {
       setMessages((prev) => [...prev, msg]);
@@ -74,18 +74,12 @@ useEffect(() => {
       setTypingUser("");
     });
 
-    socket.on("message-deleted", (messageId) => {
-      setMessages((prev) =>
-        prev.filter((msg) => msg._id !== messageId)
-      );
+    socket.on("clear-board", () => {
+      setStrokes([]);
+    });
 
-      socket.on("clear-board", () => {
-        setStrokes([]);
-      });
-
-      socket.on("load-messages", (msgs) => {
-        setMessages(msgs);
-      });
+    socket.on("load-messages", (msgs) => {
+      setMessages(msgs);
     });
 
     return () => {
@@ -94,13 +88,12 @@ useEffect(() => {
       socket.off("receive-message");
       socket.off("user-typing");
       socket.off("user-stop-typing");
-      socket.off("message-deleted");
       socket.off("clear-board");
       socket.off("load-messages");
     };
   }, [roomId, user]);
 
-  /* ================= CANVAS ================= */
+  /* ================= CANVAS INITIALIZATION ================= */
   useEffect(() => {
     const canvas = canvasRef.current;
 
@@ -115,6 +108,8 @@ useEffect(() => {
 
     const ctx = canvas.getContext("2d");
     ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.textBaseline = "top";
     contextRef.current = ctx;
 
     return () => window.removeEventListener("resize", resizeCanvas);
@@ -124,70 +119,80 @@ useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = contextRef.current;
     if (!ctx) return;
-  
+
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-  
+
     ctx.setTransform(
-      scaleRef.current,
-      0,
-      0,
-      scaleRef.current,
-      offsetRef.current.x,
-      offsetRef.current.y
+      scaleRef.current, 0, 0, scaleRef.current,
+      offsetRef.current.x, offsetRef.current.y
     );
-  
+
     drawGrid(ctx);
-  
+
     /* ===============================
        DRAW SAVED OBJECTS
     =============================== */
     strokes.forEach((obj) => {
       if (!obj) return;
-  
-      if (obj.type === "pen") {
-        ctx.strokeStyle = obj.style.color;
+
+      if (obj.type === "pen" || obj.type === "eraser") {
+        ctx.strokeStyle = obj.type === "eraser" ? "rgba(0,0,0,1)" : obj.style.color;
         ctx.lineWidth = obj.style.brushSize;
-  
+        
+        // Use destination-out to act as a real eraser
+        if (obj.type === "eraser") ctx.globalCompositeOperation = "destination-out";
+        
         ctx.beginPath();
         ctx.moveTo(obj.data.x0, obj.data.y0);
         ctx.lineTo(obj.data.x1, obj.data.y1);
         ctx.stroke();
         ctx.closePath();
+        
+        if (obj.type === "eraser") ctx.globalCompositeOperation = "source-over"; // Reset
       }
-  
+
       if (obj.type === "rectangle") {
         ctx.strokeStyle = obj.style.color;
         ctx.lineWidth = obj.style.brushSize;
-  
-        ctx.strokeRect(
-          obj.data.x,
-          obj.data.y,
-          obj.data.width,
-          obj.data.height
-        );
+        ctx.strokeRect(obj.data.x, obj.data.y, obj.data.width, obj.data.height);
+      }
+
+      if (obj.type === "circle") {
+        ctx.strokeStyle = obj.style.color;
+        ctx.lineWidth = obj.style.brushSize;
+        ctx.beginPath();
+        ctx.ellipse(obj.data.centerX, obj.data.centerY, obj.data.radiusX, obj.data.radiusY, 0, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
+
+      if (obj.type === "text") {
+        ctx.fillStyle = obj.style.color;
+        ctx.font = `${obj.style.brushSize * 4}px Poppins, sans-serif`;
+        ctx.fillText(obj.data.text, obj.data.x, obj.data.y);
       }
     });
-  
+
     /* ===============================
-       🔥 RECTANGLE PREVIEW (OUTSIDE LOOP)
+       DRAW PREVIEW (WHILE DRAGGING)
     =============================== */
-    if (currentObject && currentObject.type === "rectangle") {
+    if (currentObject) {
       ctx.strokeStyle = currentObject.style.color;
       ctx.lineWidth = currentObject.style.brushSize;
-  
-      ctx.strokeRect(
-        currentObject.data.x,
-        currentObject.data.y,
-        currentObject.data.width,
-        currentObject.data.height
-      );
+
+      if (currentObject.type === "rectangle") {
+        ctx.strokeRect(currentObject.data.x, currentObject.data.y, currentObject.data.width, currentObject.data.height);
+      } else if (currentObject.type === "circle") {
+        ctx.beginPath();
+        ctx.ellipse(currentObject.data.centerX, currentObject.data.centerY, currentObject.data.radiusX, currentObject.data.radiusY, 0, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
     }
   };
 
   useEffect(() => {
     redraw();
-  }, [strokes]);
+  }, [strokes, currentObject]);
 
   const drawGrid = (ctx) => {
     const gridSize = 50;
@@ -195,21 +200,14 @@ useEffect(() => {
     ctx.lineWidth = 1;
 
     for (let x = -5000; x < 5000; x += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(x, -5000);
-      ctx.lineTo(x, 5000);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x, -5000); ctx.lineTo(x, 5000); ctx.stroke();
     }
-
     for (let y = -5000; y < 5000; y += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(-5000, y);
-      ctx.lineTo(5000, y);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-5000, y); ctx.lineTo(5000, y); ctx.stroke();
     }
   };
 
-  /* ================= DRAW ================= */
+  /* ================= DRAWING HANDLERS ================= */
   const startDrawing = (e) => {
     if (tool === "pan") {
       isPanningRef.current = true;
@@ -217,14 +215,24 @@ useEffect(() => {
     }
 
     const rect = canvasRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left - offsetRef.current.x) / scaleRef.current;
+    const y = (e.clientY - rect.top - offsetRef.current.y) / scaleRef.current;
 
-    const x =
-      (e.clientX - rect.left - offsetRef.current.x) /
-      scaleRef.current;
-    const y =
-      (e.clientY - rect.top - offsetRef.current.y) /
-      scaleRef.current;
+    // Handle Text Tool - Open an inline input
+    if (tool === "text") {
+      setTextInput({ 
+        x, y, // Canvas coordinates (scaled)
+        screenX: e.clientX - rect.left, // Screen coordinates for positioning the <input>
+        screenY: e.clientY - rect.top,
+        val: "" 
+      });
+      return;
+    }
 
+    // Close text input if clicking elsewhere
+    if (textInput) finalizeText();
+
+    startPosRef.current = { x, y };
     lastPointRef.current = { x, y };
     setIsDrawing(true);
   };
@@ -240,39 +248,50 @@ useEffect(() => {
     if (!isDrawing) return;
 
     const rect = canvasRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left - offsetRef.current.x) / scaleRef.current;
+    const y = (e.clientY - rect.top - offsetRef.current.y) / scaleRef.current;
 
-    const x =
-      (e.clientX - rect.left - offsetRef.current.x) /
-      scaleRef.current;
-    const y =
-      (e.clientY - rect.top - offsetRef.current.y) /
-      scaleRef.current;
-
+    if (tool === "pen" || tool === "eraser") {
       const object = {
         id: crypto.randomUUID(),
-        type: "pen",
-        data: {
-          x0: lastPointRef.current.x,
-          y0: lastPointRef.current.y,
-          x1: x,
-          y1: y,
-        },
-        style: {
-          color,
-          brushSize,
-        },
+        type: tool,
+        data: { x0: lastPointRef.current.x, y0: lastPointRef.current.y, x1: x, y1: y },
+        style: { color, brushSize },
       };
-      
-      // Local update
-      setStrokes((prev) => [...prev, object]);
-      
-      // Send to backend
-      socket.emit("draw", { roomId, object });
 
-    lastPointRef.current = { x, y };
+      setStrokes((prev) => [...prev, object]);
+      socket.emit("draw", { roomId, object });
+      lastPointRef.current = { x, y };
+    } 
+    else if (tool === "rectangle") {
+      setCurrentObject({
+        id: crypto.randomUUID(),
+        type: "rectangle",
+        data: { x: startPosRef.current.x, y: startPosRef.current.y, width: x - startPosRef.current.x, height: y - startPosRef.current.y },
+        style: { color, brushSize },
+      });
+    }
+    else if (tool === "circle") {
+      const radiusX = Math.abs(x - startPosRef.current.x) / 2;
+      const radiusY = Math.abs(y - startPosRef.current.y) / 2;
+      const centerX = startPosRef.current.x + (x - startPosRef.current.x) / 2;
+      const centerY = startPosRef.current.y + (y - startPosRef.current.y) / 2;
+
+      setCurrentObject({
+        id: crypto.randomUUID(),
+        type: "circle",
+        data: { centerX, centerY, radiusX, radiusY },
+        style: { color, brushSize },
+      });
+    }
   };
 
   const stopDrawing = () => {
+    if ((tool === "rectangle" || tool === "circle") && currentObject) {
+      setStrokes((prev) => [...prev, currentObject]);
+      socket.emit("draw", { roomId, object: currentObject });
+      setCurrentObject(null);
+    }
     setIsDrawing(false);
     isPanningRef.current = false;
   };
@@ -280,478 +299,193 @@ useEffect(() => {
   const handleWheel = (e) => {
     e.preventDefault();
     const zoomFactor = 0.1;
-
     if (e.deltaY < 0) scaleRef.current += zoomFactor;
     else scaleRef.current -= zoomFactor;
-
     scaleRef.current = Math.max(0.2, Math.min(5, scaleRef.current));
     redraw();
   };
 
-  /* ================= CHAT ================= */
+  const finalizeText = () => {
+    if (textInput && textInput.val.trim() !== "") {
+      const object = {
+        id: crypto.randomUUID(),
+        type: "text",
+        data: { x: textInput.x, y: textInput.y, text: textInput.val },
+        style: { color, brushSize },
+      };
+      setStrokes((prev) => [...prev, object]);
+      socket.emit("draw", { roomId, object });
+    }
+    setTextInput(null);
+  };
+
+  /* ================= CHAT & HISTORY ================= */
   const handleTyping = (value) => {
     setInput(value);
     socket.emit("typing", { roomId });
-
     clearTimeout(typingTimeout.current);
-    typingTimeout.current = setTimeout(() => {
-      socket.emit("stop-typing", { roomId });
-    }, 800);
+    typingTimeout.current = setTimeout(() => socket.emit("stop-typing", { roomId }), 800);
   };
 
   const sendMessage = () => {
-    if (!input.trim() && !file) return;
-
-    socket.emit("send-message", {
-      roomId,
-      message: input,
-      file,
-    });
-
-    setInput("");
-    setFile(null);
-  };
-
-  const handleDelete = (messageId) => {
-    socket.emit("delete-message", { messageId, roomId });
-    setActiveMenuId(null);
+    if (!input.trim()) return;
+    socket.emit("send-message", { roomId, message: input, file });
+    setInput(""); setFile(null);
   };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-
-  
-
-
-
-
-
   const handleUndo = () => {
     setStrokes((prev) => {
       if (prev.length === 0) return prev;
-  
       const newStrokes = [...prev];
       const removed = newStrokes.pop();
-  
       setRedoStack((r) => [...r, removed]);
-  
       return newStrokes;
     });
   };
-  
+
   const handleRedo = () => {
     setRedoStack((prevRedo) => {
       if (prevRedo.length === 0) return prevRedo;
-  
       const newRedo = [...prevRedo];
       const restored = newRedo.pop();
-  
       setStrokes((prev) => [...prev, restored]);
-  
       return newRedo;
     });
   };
 
-
   const handleShare = async () => {
-    const shareUrl = `${window.location.origin}/room/${roomId}`;
-  
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(`${window.location.origin}/room/${roomId}`);
       alert("Room link copied to clipboard! 🚀");
-    } catch (err) {
-      alert("Failed to copy link");
-    }
+    } catch (err) { alert("Failed to copy link"); }
   };
 
-
-  
-  /* ================= UI ================= */
   return (
-    <div style={styles.container}>
+    <div className="h-screen flex flex-col bg-zinc-50 font-poppins">
       {/* TOP BAR */}
-      <div style={styles.topBar}>
-        <h2 style={styles.roomTitle}>Room: {roomId}</h2>
-        <div style={{ display: "flex", gap: "15px", alignItems: "center" }}>
-    <button style={styles.shareBtn} onClick={handleShare}>
-      🔗 Share
-    </button>
-
-    <input
-      type="color"
-      value={color}
-      onChange={(e) => setColor(e.target.value)}
-    />
-
-    <input
-      type="range"
-      min="1"
-      max="20"
-      value={brushSize}
-      onChange={(e) => setBrushSize(Number(e.target.value))}
-    />
-  </div>
-
-        <div style={styles.topControls}>
-
-            
-
-  {/* SHAPE TOOLS */}
-  <button
-    style={tool === "pen" ? styles.activeTopTool : styles.topTool}
-    onClick={() => setTool("pen")}
-  >
-    ✏️
-  </button>
-
-  <button
-    style={tool === "rectangle" ? styles.activeTopTool : styles.topTool}
-    onClick={() => setTool("rectangle")}
-  >
-    ▭
-  </button>
-
-  <button
-    style={tool === "circle" ? styles.activeTopTool : styles.topTool}
-    onClick={() => setTool("circle")}
-  >
-    ◯
-  </button>
-
-  <button
-    style={tool === "line" ? styles.activeTopTool : styles.topTool}
-    onClick={() => setTool("line")}
-  >
-    ／
-  </button>
-
-  <button
-    style={tool === "text" ? styles.activeTopTool : styles.topTool}
-    onClick={() => setTool("text")}
-  >
-    T
-  </button>
-
-  {/* COLOR PICKER */}
-  <input
-    type="color"
-    value={color}
-    onChange={(e) => setColor(e.target.value)}
-  />
-
-  {/* BRUSH SIZE */}
-  <input
-    type="range"
-    min="1"
-    max="20"
-    value={brushSize}
-    onChange={(e) => setBrushSize(Number(e.target.value))}
-  />
-
-</div>
+      <div className="h-16 border-b border-zinc-200 bg-white px-6 flex items-center justify-between">
+        <div className="flex items-center gap-6">
+          <h2 className="text-sm text-zinc-500">Room</h2>
+          <span className="text-sm font-medium text-black">{roomId}</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <button onClick={handleShare} className="px-4 py-2 text-sm bg-black text-white rounded-md hover:bg-zinc-800 transition">Share</button>
+          <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="w-8 h-8 border border-zinc-300 rounded cursor-pointer" title="Color" />
+          <input type="range" min="1" max="30" value={brushSize} onChange={(e) => setBrushSize(Number(e.target.value))} title="Brush Size" />
+        </div>
       </div>
 
-      {/* MAIN AREA */}
-      <div style={styles.mainSection}>
+      {/* MAIN */}
+      <div className="flex flex-1 overflow-hidden">
+        
         {/* LEFT TOOLBAR */}
-        <div style={styles.leftToolbar}>
-          <button
-            style={tool === "pen" ? styles.activeTool : styles.toolBtn}
-            onClick={() => setTool("pen")}
-          >
-            ✏️
-          </button>
+        <div className="w-20 border-r border-zinc-200 bg-white flex flex-col items-center py-6 gap-3 overflow-y-auto">
+          {[
+            { id: "pen", icon: "✏️", title: "Pen" },
+            { id: "eraser", icon: "🧽", title: "Eraser" },
+            { id: "rectangle", icon: "⬜", title: "Rectangle" },
+            { id: "circle", icon: "⭕", title: "Circle" },
+            { id: "text", icon: "🔤", title: "Text" },
+            { id: "pan", icon: "🖐", title: "Pan Tool" },
+          ].map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTool(t.id)}
+              className={`w-10 h-10 rounded-md flex items-center justify-center text-lg ${
+                tool === t.id ? "bg-black text-white" : "bg-zinc-100 hover:bg-zinc-200"
+              }`}
+              title={t.title}
+            >
+              {t.icon}
+            </button>
+          ))}
 
-          <button
-            style={tool === "pan" ? styles.activeTool : styles.toolBtn}
-            onClick={() => setTool("pan")}
-          >
-            🖐
-          </button>
-
-          
-
-          <button
-  style={styles.toolBtn}
-  onClick={handleUndo}
->
-  ↩
-</button>
-
-<button
-  style={styles.toolBtn}
-  onClick={handleRedo}
->
-  ↪
-</button>
+          <hr className="w-10 border-zinc-200 my-2" />
+          <button onClick={handleUndo} className="w-10 h-10 rounded-md bg-zinc-100 hover:bg-zinc-200 flex items-center justify-center text-xl" title="Undo">↩</button>
+          <button onClick={handleRedo} className="w-10 h-10 rounded-md bg-zinc-100 hover:bg-zinc-200 flex items-center justify-center text-xl" title="Redo">↪</button>
         </div>
 
-        {/* WHITEBOARD */}
-        <div style={styles.whiteboard}>
+        {/* CANVAS AREA */}
+        <div className="flex-1 relative bg-white overflow-hidden">
           <canvas
             ref={canvasRef}
-            style={styles.canvas}
+            className={`w-full h-full ${tool === "pan" ? "cursor-grab" : "cursor-crosshair"}`}
             onMouseDown={startDrawing}
             onMouseMove={draw}
             onMouseUp={stopDrawing}
             onMouseLeave={stopDrawing}
             onWheel={handleWheel}
           />
+
+          {/* ON-CANVAS HTML TEXT INPUT */}
+          {textInput && (
+            <input
+              autoFocus
+              type="text"
+              value={textInput.val}
+              onChange={(e) => setTextInput({ ...textInput, val: e.target.value })}
+              onBlur={finalizeText}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") finalizeText();
+              }}
+              style={{
+                position: "absolute",
+                left: textInput.screenX,
+                top: textInput.screenY,
+                color: color,
+                fontSize: `${brushSize * 4 * scaleRef.current}px`,
+                background: "transparent",
+                border: "1px dashed #ccc",
+                outline: "none",
+                fontFamily: "Poppins, sans-serif",
+                padding: "2px",
+                zIndex: 10,
+                minWidth: "150px"
+              }}
+              placeholder="Type and press Enter..."
+            />
+          )}
         </div>
 
-        {/* YOUR ADVANCED CHAT BOX */}
-        <div style={styles.chatBoxWrapper}>
-          <div style={styles.chatBox}>
+        {/* CHAT AREA (unchanged) */}
+        <div className="w-96 border-l border-zinc-200 bg-white flex flex-col">
+          <div className="h-14 border-b border-zinc-200 px-4 flex items-center text-sm font-medium">Room Chat</div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {messages.map((msg) => {
               const isMe = msg.sender === user?.name;
-
               return (
-                <div
-                  key={msg._id}
-                  style={{
-                    display: "flex",
-                    justifyContent: isMe ? "flex-end" : "flex-start",
-                    marginBottom: "12px",
-                  }}
-                >
-                  <div
-                    style={{
-                      position: "relative",
-                      backgroundColor: isMe ? "#4CAF50" : "#ffffff",
-                      color: isMe ? "white" : "black",
-                      padding: "10px 15px",
-                      borderRadius: "16px",
-                      maxWidth: "70%",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        fontSize: "12px",
-                        opacity: 0.8,
-                        marginBottom: "5px",
-                      }}
-                    >
-                      <span>{msg.sender}</span>
-
-                      {isMe && (
-                        <button
-                          onClick={() =>
-                            setActiveMenuId(
-                              activeMenuId === msg._id ? null : msg._id
-                            )
-                          }
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            color: isMe ? "white" : "black",
-                          }}
-                        >
-                          ⋮
-                        </button>
-                      )}
-                    </div>
-
+                <div key={msg._id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-xs px-4 py-2 rounded-lg text-sm ${isMe ? "bg-black text-white" : "bg-zinc-100 text-black"}`}>
+                    <div className="text-xs opacity-60 mb-1">{msg.sender}</div>
                     {msg.message && <div>{msg.message}</div>}
-
-                    {activeMenuId === msg._id && (
-                      <div style={styles.menu}>
-                        <div
-                          style={styles.deleteItem}
-                          onClick={() => handleDelete(msg._id)}
-                        >
-                          🗑 Delete
-                        </div>
-                      </div>
-                    )}
-
-                    <div style={styles.time}>
-                      {new Date(msg.createdAt).toLocaleTimeString()}
-                    </div>
+                    <div className="text-[10px] opacity-50 mt-2 text-right">{new Date(msg.createdAt).toLocaleTimeString()}</div>
                   </div>
                 </div>
               );
             })}
-
-            {typingUser && (
-              <div style={styles.typing}>{typingUser}</div>
-            )}
-
+            {typingUser && <div className="text-xs text-zinc-400">{typingUser}</div>}
             <div ref={messagesEndRef} />
           </div>
-
           <form
-  onSubmit={(e) => {
-    e.preventDefault();
-    sendMessage();
-  }}
-  style={styles.inputRow}
->
-  <input
-    type="text"
-    value={input}
-    onChange={(e) => handleTyping(e.target.value)}
-    placeholder="Type a message..."
-    style={styles.input}
-  />
-
-  {/* Hidden File Input */}
-  <input
-    type="file"
-    ref={fileInputRef}
-    style={{ display: "none" }}
-    onChange={(e) => setFile(e.target.files[0])}
-  />
-
-  {/* Attachment Icon */}
-  <span
-    style={styles.attachIcon}
-    onClick={() => fileInputRef.current.click()}
-  >
-    📎
-  </span>
-
-  <button type="submit" style={styles.button}>
-    Send
-  </button>
-</form>
+            onSubmit={(e) => { e.preventDefault(); sendMessage(); }}
+            className="border-t border-zinc-200 p-3 flex gap-2"
+          >
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => handleTyping(e.target.value)}
+              placeholder="Type a message..."
+              className="flex-1 px-3 py-2 border border-zinc-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black"
+            />
+            <button type="submit" className="px-4 py-2 bg-black text-white rounded-md text-sm hover:bg-zinc-800 transition">Send</button>
+          </form>
         </div>
+
       </div>
     </div>
   );
 }
-
-const styles = {
-  container: {
-    height: "100vh",
-    display: "flex",
-    flexDirection: "column",
-  },
-  topBar: {
-    minHeight: "70px",
-    display: "flex",
-    flexWrap: "wrap",        // 👈 important
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "10px 20px",
-    borderBottom: "1px solid #ddd",
-    background: "#ffffff",
-    gap: "10px",             // 👈 spacing when wrapping
-  },
-  roomTitle: {
-    margin: 0,
-    fontSize: "18px",
-    wordBreak: "break-all",  // 👈 prevents overflow
-  },
-  topControls: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "10px",
-    alignItems: "center",
-  },
-  mainSection: {
-    flex: 1,
-    display: "flex",
-    overflow: "hidden",
-  },
-  whiteboard: {
-    flex: 1,
-    background: "#f8f8f8",
-  },
-  canvas: {
-    width: "100%",
-    height: "100%",
-    display: "block",
-    background: "#fff",
-    cursor: "crosshair",
-  },
-  leftToolbar: {
-    position: "absolute",
-    top: "100px",
-    left: "20px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "12px",
-    background: "white",
-    padding: "12px",
-    borderRadius: "16px",
-    boxShadow: "0 8px 24px rgba(0,0,0,0.1)",
-    zIndex: 100,
-  },
-  toolBtn: {
-    border: "none",
-    background: "#f5f5f5",
-    padding: "10px",
-    borderRadius: "12px",
-    cursor: "pointer",
-    fontSize: "18px",
-  },
-  activeTool: {
-    border: "none",
-    background: "#4CAF50",
-    color: "white",
-    padding: "10px",
-    borderRadius: "12px",
-    cursor: "pointer",
-    fontSize: "18px",
-  },
-  chatBoxWrapper: {
-    width: "350px",
-    minWidth: "350px",
-    maxWidth: "350px",
-    borderLeft: "1px solid #ddd",
-    background: "#f2f2f2",
-    display: "flex",
-    flexDirection: "column",
-    height: "100%",
-  },
-  
-  chatBox: {
-    flex: 1,
-    overflowY: "auto",
-    padding: "15px",
-    display: "flex",
-    flexDirection: "column",
-  },
-  
-  inputRow: {
-    display: "flex",
-    gap: "10px",
-    padding: "10px",
-    borderTop: "1px solid #ddd",
-    background: "#ffffff",
-  },
-
-  topTool: {
-    border: "none",
-    background: "#f5f5f5",
-    padding: "8px 12px",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontSize: "16px",
-  },
-  
-  activeTopTool: {
-    border: "none",
-    background: "#4CAF50",
-    color: "white",
-    padding: "8px 12px",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontSize: "16px",
-  },
-  shareBtn: {
-    padding: "8px 16px",
-    borderRadius: "8px",
-    border: "none",
-    background: "#111827",
-    color: "white",
-    cursor: "pointer",
-  },
-};
-
-export default Room;

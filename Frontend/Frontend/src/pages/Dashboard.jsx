@@ -10,20 +10,17 @@ function Dashboard() {
   const { logout, user } = useAuth();
   const token = localStorage.getItem("token");
 
-  /* ================= PROTECT DASHBOARD ================= */
   useEffect(() => {
     if (!localStorage.getItem("token")) {
       navigate("/login");
     }
   }, [navigate]);
 
-  /* ================= FETCH BOARDS ================= */
   const fetchBoards = async () => {
     try {
       const res = await fetch("http://localhost:8000/api/boards", {
         headers: { Authorization: `Bearer ${token}` },
       });
-
       const data = await res.json();
       setBoards(data);
     } catch (error) {
@@ -37,14 +34,12 @@ function Dashboard() {
     if (user) fetchBoards();
   }, [user]);
 
-  /* ================= CREATE ================= */
   const createBoard = async () => {
     try {
       const res = await fetch("http://localhost:8000/api/boards", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-
       const data = await res.json();
       setBoards((prev) => [data, ...prev]);
     } catch (error) {
@@ -52,7 +47,6 @@ function Dashboard() {
     }
   };
 
-  /* ================= DELETE ================= */
   const deleteBoard = async (roomId) => {
     const confirmDelete = window.confirm(
       "Are you sure you want to delete this board?"
@@ -73,7 +67,6 @@ function Dashboard() {
     }
   };
 
-  /* ================= RENAME ================= */
   const renameBoard = async (roomId) => {
     const newTitle = prompt("Enter new board name:");
     if (!newTitle) return;
@@ -103,261 +96,132 @@ function Dashboard() {
     }
   };
 
-  /* ================= LOGOUT HANDLER ================= */
   const handleLogout = () => {
     logout();
     navigate("/");
   };
 
-  /* ================= LOADER ================= */
   if (loading)
     return (
-      <div style={styles.loadingWrapper}>
-        <style>
-          {`
-            @keyframes spin {
-              0% { transform: rotate(0deg); }
-              100% { transform: rotate(360deg); }
-            }
-          `}
-        </style>
-        <div style={styles.loader}></div>
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50">
+        <div className="w-10 h-10 border-4 border-zinc-200 border-t-black rounded-full animate-spin" />
       </div>
     );
 
   return (
-    <div style={styles.page}>
-      {/* ================= NAVBAR ================= */}
-      <div style={styles.navbar}>
-        <div style={styles.logo} onClick={() => navigate("/")}>
-          CollabBoard
-        </div>
+    <div className="min-h-screen bg-zinc-50 font-poppins">
 
-        <div style={styles.navLinks}>
-          <span onClick={() => navigate("/")}>Home</span>
-          <span onClick={() => navigate("/about")}>About</span>
-          <span onClick={() => navigate("/services")}>
-            Services
-          </span>
-          <span onClick={() => navigate("/contact")}>
-            Contact
-          </span>
-          <span style={styles.activeLink}>Dashboard</span>
+      {/* NAVBAR */}
+      <div className="border-b border-zinc-200 bg-white">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+          <h1
+            onClick={() => navigate("/")}
+            className="text-xl font-semibold cursor-pointer"
+          >
+            InteractX
+          </h1>
 
-          <button style={styles.logoutBtn} onClick={handleLogout}>
-            Logout
-          </button>
+          <div className="flex items-center gap-8 text-sm text-zinc-600">
+            <span
+              onClick={() => navigate("/")}
+              className="hover:text-black cursor-pointer"
+            >
+              Home
+            </span>
+            <span
+              onClick={() => navigate("/about")}
+              className="hover:text-black cursor-pointer"
+            >
+              About
+            </span>
+            <span className="text-black font-medium">
+              Dashboard
+            </span>
+
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 bg-black text-white rounded-md hover:bg-zinc-800 transition"
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* ================= CONTENT ================= */}
-      <div style={styles.container}>
-        <div style={styles.header}>
+      {/* CONTENT */}
+      <div className="max-w-7xl mx-auto px-6 py-20">
+
+        <div className="flex justify-between items-end mb-14">
           <div>
-            <h1 style={styles.title}>Your Boards</h1>
+            <h1 className="text-4xl font-semibold tracking-tight">
+              Your Boards
+            </h1>
             {user && (
-              <p style={styles.subtitle}>
-                Welcome back, {user.name} 👋
+              <p className="mt-3 text-zinc-500">
+                Welcome back, {user.name}
               </p>
             )}
           </div>
 
-          <button style={styles.newBtn} onClick={createBoard}>
+          <button
+            onClick={createBoard}
+            className="px-6 py-3 bg-black text-white rounded-md hover:bg-zinc-800 transition"
+          >
             + New Board
           </button>
         </div>
 
-        <div style={styles.grid}>
-          {boards.length === 0 && (
-            <div style={styles.emptyState}>
-              <h3>No boards yet</h3>
-              <p>
-                Create your first board to start collaborating 🚀
-              </p>
-            </div>
-          )}
+        {boards.length === 0 ? (
+          <div className="border border-zinc-200 bg-white rounded-2xl p-16 text-center">
+            <h3 className="text-lg font-medium">
+              No boards yet
+            </h3>
+            <p className="mt-2 text-zinc-500">
+              Create your first board to start collaborating.
+            </p>
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {boards.map((board) => (
+              <div
+                key={board.roomId}
+                onClick={() =>
+                  navigate(`/room/${board.roomId}`)
+                }
+                className="group p-8 bg-white border border-zinc-200 rounded-2xl cursor-pointer hover:border-zinc-400 transition"
+              >
+                <h3 className="text-lg font-semibold mb-8">
+                  {board.title}
+                </h3>
 
-          {boards.map((board) => (
-            <div
-              key={board.roomId}
-              style={styles.card}
-              onClick={() =>
-                navigate(`/room/${board.roomId}`)
-              }
-            >
-              <h3 style={styles.cardTitle}>
-                {board.title}
-              </h3>
+                <div className="flex gap-4">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      renameBoard(board.roomId);
+                    }}
+                    className="text-sm px-4 py-2 bg-zinc-100 rounded-md hover:bg-zinc-200 transition"
+                  >
+                    Rename
+                  </button>
 
-              <div style={styles.actions}>
-                <button
-                  style={styles.renameBtn}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    renameBoard(board.roomId);
-                  }}
-                >
-                  Rename
-                </button>
-
-                <button
-                  style={styles.deleteBtn}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteBoard(board.roomId);
-                  }}
-                >
-                  Delete
-                </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteBoard(board.roomId);
+                    }}
+                    className="text-sm px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
-/* ================= STYLES ================= */
-
-const styles = {
-  page: {
-    minHeight: "100vh",
-    background: "#f8f5f0",
-    fontFamily: "Arial, sans-serif",
-  },
-
-  navbar: {
-    height: "70px",
-    background: "white",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "0 80px",
-    boxShadow: "0 4px 15px rgba(0,0,0,0.05)",
-  },
-
-  logo: {
-    fontWeight: "bold",
-    fontSize: "20px",
-    cursor: "pointer",
-  },
-
-  navLinks: {
-    display: "flex",
-    gap: "30px",
-    alignItems: "center",
-    cursor: "pointer",
-  },
-
-  activeLink: {
-    fontWeight: "600",
-    borderBottom: "2px solid #111827",
-  },
-
-  logoutBtn: {
-    padding: "8px 16px",
-    borderRadius: "8px",
-    border: "none",
-    background: "#111827",
-    color: "white",
-    cursor: "pointer",
-  },
-
-  container: {
-    padding: "70px 100px",
-  },
-
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "60px",
-  },
-
-  title: {
-    fontSize: "32px",
-  },
-
-  subtitle: {
-    color: "#6b7280",
-    marginTop: "6px",
-  },
-
-  newBtn: {
-    padding: "12px 22px",
-    borderRadius: "10px",
-    border: "none",
-    background: "#111827",
-    color: "white",
-    cursor: "pointer",
-  },
-
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-    gap: "30px",
-  },
-
-  card: {
-    padding: "30px",
-    borderRadius: "18px",
-    background: "white",
-    boxShadow: "0 15px 35px rgba(0,0,0,0.06)",
-    transition: "all 0.3s ease",
-    cursor: "pointer",
-  },
-
-  cardTitle: {
-    fontSize: "18px",
-    marginBottom: "25px",
-  },
-
-  actions: {
-    display: "flex",
-    gap: "15px",
-  },
-
-  renameBtn: {
-    padding: "8px 14px",
-    borderRadius: "8px",
-    border: "none",
-    background: "#e5e7eb",
-    cursor: "pointer",
-  },
-
-  deleteBtn: {
-    padding: "8px 14px",
-    borderRadius: "8px",
-    border: "none",
-    background: "#ef4444",
-    color: "white",
-    cursor: "pointer",
-  },
-
-  emptyState: {
-    background: "white",
-    padding: "60px",
-    borderRadius: "18px",
-    textAlign: "center",
-    gridColumn: "1 / -1",
-  },
-
-  loadingWrapper: {
-    height: "100vh",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  loader: {
-    width: "40px",
-    height: "40px",
-    border: "4px solid #e5e7eb",
-    borderTop: "4px solid #111827",
-    borderRadius: "50%",
-    animation: "spin 1s linear infinite",
-  },
-};
 
 export default Dashboard;
